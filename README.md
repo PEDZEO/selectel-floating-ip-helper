@@ -81,20 +81,38 @@ Windows PowerShell:
 Linux/macOS:
 
 ```bash
+# Показать все floating IP в проекте
 python3 selectel_floating_ip.py list
+
+# Найти подходящий floating IP по локальным спискам
 python3 selectel_floating_ip.py find --local-list
+
+# Проверить создание floating IP без реального создания
 python3 selectel_floating_ip.py create --dry-run
+
+# Создать floating IP и проверить его по спискам
 python3 selectel_floating_ip.py create
+
+# Проверить удаление floating IP без реального удаления
 python3 selectel_floating_ip.py delete --ip 111.88.228.214 --dry-run
 ```
 
 Windows PowerShell:
 
 ```powershell
+# Показать все floating IP в проекте
 python .\selectel_floating_ip.py list
+
+# Найти подходящий floating IP по локальным спискам
 python .\selectel_floating_ip.py find --local-list
+
+# Проверить создание floating IP без реального создания
 python .\selectel_floating_ip.py create --dry-run
+
+# Создать floating IP и проверить его по спискам
 python .\selectel_floating_ip.py create
+
+# Проверить удаление floating IP без реального удаления
 python .\selectel_floating_ip.py delete --ip 111.88.228.214 --dry-run
 ```
 
