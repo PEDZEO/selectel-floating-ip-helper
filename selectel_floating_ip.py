@@ -21,6 +21,7 @@ from pathlib import Path
 
 API_BASE = "https://api.selectel.ru/vpc/resell/v2"
 SCRIPT_DIR = Path(__file__).resolve().parent
+TRANSIENT_HTTP_STATUS_CODES = {408, 500, 502, 503, 504}
 ENV_PATH = SCRIPT_DIR / ".env"
 LOG_DIR = SCRIPT_DIR / "logs"
 
@@ -417,7 +418,7 @@ def api_request(method: str, path: str, token: str, payload: dict | None = None)
                     wait_seconds = min(backoff_cap, backoff_base * (2 ** (attempt - 1)))
                 sleep_with_jitter(wait_seconds, wait_seconds + 3.0)
                 continue
-            if error.code in {500, 502, 503, 504} and attempt < max_retries:
+            if error.code in TRANSIENT_HTTP_STATUS_CODES and attempt < max_retries:
                 wait_seconds = min(backoff_cap, backoff_base * (2 ** (attempt - 1)))
                 sleep_with_jitter(wait_seconds, wait_seconds + 3.0)
                 continue
@@ -622,6 +623,10 @@ def is_rate_limit_error(error: ApiError) -> bool:
     except json.JSONDecodeError:
         return "too_many_requests" in error.details or "rate" in error.details.lower()
     return payload.get("error") in {"too_many_requests", "rate_limit_exceeded"}
+
+
+def is_transient_http_error(error: ApiError) -> bool:
+    return error.status_code in TRANSIENT_HTTP_STATUS_CODES
 
 
 def is_resource_not_found_error(error: ApiError) -> bool:
@@ -834,7 +839,7 @@ def cmd_create(token: str, args: argparse.Namespace) -> int:
                         )
                         time.sleep(backoff_sec)
                         continue
-                    if error.status_code in {500, 502, 503, 504}:
+                    if is_transient_http_error(error):
                         backoff_sec = random.uniform(
                             env_float("SELECTEL_BACKOFF_BASE_SECONDS", 10.0),
                             env_float("SELECTEL_BACKOFF_CAP_SECONDS", 120.0),
@@ -1098,6 +1103,27 @@ def cmd_create(token: str, args: argparse.Namespace) -> int:
                     compact_line=(
                         f"attempt {attempt} -> rate limited "
                         f"({error.details.strip() or '<empty>'}), retry after {backoff_sec:.0f}s"
+                    ),
+                )
+                time.sleep(backoff_sec)
+                continue
+            if is_transient_http_error(error):
+                backoff_sec = random.uniform(
+                    env_float("SELECTEL_BACKOFF_BASE_SECONDS", 10.0),
+                    env_float("SELECTEL_BACKOFF_CAP_SECONDS", 120.0),
+                )
+                emit(
+                    args,
+                    {
+                        "transient_error": True,
+                        "status_code": error.status_code,
+                        "attempt": attempt,
+                        "sleep_seconds": round(backoff_sec, 1),
+                        "details": error.details.strip() or "<empty>",
+                    },
+                    compact_line=(
+                        f"attempt {attempt} -> HTTP {error.status_code} "
+                        f"({error.details.strip() or 'transient error'}), retry after {backoff_sec:.0f}s"
                     ),
                 )
                 time.sleep(backoff_sec)
